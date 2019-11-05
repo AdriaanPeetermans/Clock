@@ -1,0 +1,7 @@
+//$stimulate inputs.stim
+$log PINB
+$log TCNT1
+$startlog output.stim
+#1100
+$stoplog
+$break

@@ -1,0 +1,12 @@
+#100
+PINB &= 0xfb
+#104
+PINB |= 0x04
+#208
+PINB &= 0xfb
+#104
+PINB |= 0x04
+#104
+PINB &= 0xfb
+#312
+PINB |= 0x04
