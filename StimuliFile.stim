@@ -1,4 +1,4 @@
-//$stimulate inputs.stim
+$stimulate inputs.stim
 $log PINB
 $log TCNT1
 $startlog output.stim

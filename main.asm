@@ -47,10 +47,6 @@ RESET:
 	in r16, MCUCR						; load MCU Control Register
 	ori r16, $02						; or imediate 0x02 (enable negative edge INT0)
 	out MCUCR, r16						; write back MCUCR
-	
-	in r16, GIMSK						; load General Interrupt Mask Register
-	ori r16, $40						; or imediate 0x40 (enable INT0)
-	out GIMSK, r16						; write back GIMSK
 
 ;	Initialize GIOP:
 	ldi r16, $1e						; load constant
@@ -58,22 +54,40 @@ RESET:
 	ldi r16, $13						; load constant
 	out DDRB, r16						; write DDRB
 
+;	Prepare for receiving data:
+	rcall READ_DATA						; call to READ_DATA subroutine
+
 ;	enable global interrupts:
 	sei									; set interrupt bit in SREG
 
 ;	example code:
-	ldi r16, $5a
-	mov r1, r16
-	ldi r16, $12
-	mov r2, r16
-	rcall WRITE_DATA
-CHECK_READY:
-	mov r16, r0
-	andi r16, $04
-	cpi r16, $04
-	brne CHECK_READY
+;	ldi r16, $5a
+;	mov r1, r16
+;	ldi r16, $12
+;	mov r2, r16
+;	rcall WRITE_DATA
+;CHECK_READY:
+;	mov r16, r0
+;	andi r16, $04
+;	cpi r16, $04
+;	brne CHECK_READY
 LOOP:
 	rjmp LOOP
+
+;	Read data subroutine:
+;		inputs:		none
+;		outputs:	r1		rx_byte
+;					r0[3]	ready
+READ_DATA:
+;	Enable INT0:
+	in r16, GIMSK						; load General Interrupt Mask Register
+	ori r16, $40						; or imediate 0x40 (enable INT0)
+	out GIMSK, r16						; write back GIMSK
+
+;	Initialize transmit register:
+	ldi r16, $08						; load imediate 0x08
+	mov r0, r16							; initialize transmit register (bitCnt = 0, R/W = R, ready = 0)
+	ret
 
 ;	Write data subroutine:
 ;		inputs:		r1		tx_byte
@@ -112,10 +126,6 @@ INT0_ISR:
 ;	Initialize counter 1:
 	ldi r16, $00						; load constant zero
 	out TCNT1, r16						; initialize counter 1
-
-;	Initialize transmit register:
-	ldi r16, $08						; load imediate 0x08
-	mov r0, r16							; initialize transmit register (bitCnt = 0, R/W = R, ready = 0)
 
 ;	disable INT0:
 	in r16, GIMSK						; load GIMSK
@@ -257,7 +267,15 @@ FIRST_READ:
 	reti
 
 LAST_READ:
+;	Set ready flag:
+	mov r16, r0							; move contents of r0 into r16
+	ori r16, $04						; set ready flag high
+	mov r0, r16							; move contents of r16 back into r0
 
+;	Disable counter 1 iterrupt:
+	in r16, TIMSK						; load Timer/Counter1 Interrupt Mask Register
+	andi r16, $fb						; and imediate 0xfb (disable TOIE1)
+	out TIMSK, r16						; write back TIMSK
 	reti
 
 ;	Timerzero overwlof ISR:
