@@ -66,11 +66,34 @@ RESET:
 ;	ldi r16, $12
 ;	mov r2, r16
 ;	rcall WRITE_DATA
-;CHECK_READY:
-;	mov r16, r0
-;	andi r16, $04
-;	cpi r16, $04
-;	brne CHECK_READY
+CHECK_READY1:
+	mov r16, r0
+	andi r16, $04
+	cpi r16, $04
+	brne CHECK_READY1
+;	Send again:
+	ldi r16, $12
+	mov r2, r16
+	rcall WRITE_DATA
+CHECK_READY2:
+	mov r16, r0
+	andi r16, $04
+	cpi r16, $04
+	brne CHECK_READY2
+;	Send 0x26
+	ldi r16, $26
+	mov r1, r16
+	ldi r16, $12
+	mov r2, r16
+	rcall WRITE_DATA
+CHECK_READY3:
+	mov r16, r0
+	andi r16, $04
+	cpi r16, $04
+	brne CHECK_READY3
+;	Read again:
+	rcall READ_DATA
+	rjmp CHECK_READY1
 LOOP:
 	rjmp LOOP
 
@@ -107,8 +130,8 @@ WRITE_DATA:
 	out TCNT1, r16						; initialize counter 1
 
 ;	Initialize counter 1 duration:
-	ldi r16, $49						; load constant 73
-	out OCR1C, r16						; write 73 to max counter 1
+	ldi r16, $48						; load constant 72
+	out OCR1C, r16						; write 72 to max counter 1
 
 ;	Initialize transmit register:
 	ldi r16, $00						; load imediate 0x00
@@ -121,11 +144,14 @@ WRITE_DATA:
 	ret
 	
 
-;	INT0 ISR:
+;	INT0 ISR: (regs changed: r16)
 INT0_ISR:
 ;	Initialize counter 1:
 	ldi r16, $00						; load constant zero
 	out TCNT1, r16						; initialize counter 1
+
+;	Store SREG in r3:
+	in r3, SREG							; load SREG in r3
 
 ;	disable INT0:
 	in r16, GIMSK						; load GIMSK
@@ -140,6 +166,9 @@ INT0_ISR:
 	in r16, TIMSK						; load Timer/Counter1 Interrupt Mask Register
 	ori r16, $04						; or imediate 0x04 (enable TOIE1)
 	out TIMSK, r16						; write back TIMSK
+
+;	Restore SREG and leave ISR:
+	out SREG, r3						; restore SREG
 	reti
 
 ;	Pin change interrupt:
@@ -148,7 +177,7 @@ PCINT0_ISR:
 TIM1_COMPA_ISR:
 	reti
 
-;	Timer one overflow ISR:
+;	Timer one overflow ISR: (regs changed: r16, r17, r18, r0, r1)
 TIM1_OVF_ISR:
 ;	Read input:
 	in r18, PINB						; store input into r18
@@ -159,6 +188,9 @@ TIM1_OVF_ISR:
 
 	ldi r16, $67						; load constant 103
 	out OCR1C, r16						; write 103 to max counter 1
+
+;	Store SREG in r3:
+	in r3, SREG							; load SREG into r3
 
 ;	Check bit R/W:
 	mov r16, r0							; load r0 into r16
@@ -202,6 +234,9 @@ WRITE_INCR:
 
 ;	shift tx_byte register (r1) to right:
 	lsr r1								; shift for new LSB
+
+;	Restore SREG and leave ISR:
+	out SREG, r3						; restore SREG
 	reti
 
 LAST_WRITE:
@@ -210,6 +245,22 @@ LAST_WRITE:
 	or r16, r2							; set pins high
 	out PORTB, r16						; write back PORTB
 
+;	Check waitEnd bit:
+	mov r16, r0							; load contents of r0 into r16
+	andi r16, $02						; remove all bits except for waitEnd
+	cpi r16, $02						; check if waitEnd is set
+	breq WRITE_READY
+
+;	If waitEnd not set, set waitEnd and wait for another cycle:
+	mov r16, r0							; load contents of r0 into r16
+	ori r16, $02						; set waitEnd bit
+	mov r0, r16							; write back to r0
+
+;	Restore SREG and leave ISR:
+	out SREG, r3						; restore SREG
+	reti
+
+WRITE_READY:
 ;	Set ready flag:
 	mov r16, r0							; move contents of r0 into r16
 	ori r16, $04						; set ready flag high
@@ -219,6 +270,9 @@ LAST_WRITE:
 	in r16, TIMSK						; load Timer/Counter1 Interrupt Mask Register
 	andi r16, $fb						; and imediate 0xfb (disable TOIE1)
 	out TIMSK, r16						; write back TIMSK
+
+;	Restore SREG and leave ISR:
+	out SREG, r3						; restore SREG
 	reti
 
 READ:
@@ -247,6 +301,9 @@ READ:
 INCR_BITCNT:
 	ldi r17, $10						; load 1 for addition to bit count
 	add r0, r17							; increment bit count
+
+;	Restore SREG and leave ISR:
+	out SREG, r3						; restore SREG
 	reti
 
 FIRST_READ:
@@ -264,6 +321,9 @@ FIRST_READ:
 	in r16, GIMSK						; load GIMSK
 	ori r16, $40						; enable INT0
 	out GIMSK, r16						; write back GIMSK
+
+;	Restore SREG and leave ISR:
+	out SREG, r3						; restore SREG
 	reti
 
 LAST_READ:
@@ -276,6 +336,9 @@ LAST_READ:
 	in r16, TIMSK						; load Timer/Counter1 Interrupt Mask Register
 	andi r16, $fb						; and imediate 0xfb (disable TOIE1)
 	out TIMSK, r16						; write back TIMSK
+
+;	Restore SREG and leave ISR:
+	out SREG, r3						; restore SREG
 	reti
 
 ;	Timerzero overwlof ISR:
